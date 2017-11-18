@@ -1,0 +1,42 @@
+public class SortDemo {
+	public static void main(String[] args) { 
+	final int N = 50000;
+	int[] nums1 = new int[N];
+	int[] nums2 = new int[N];
+	for(int i=0;i<nums1.length;i++) {
+		nums1[i]=(int)(Math.random()*10000);
+		nums2[i]=nums1[i];
+	}
+	//冒泡排序法
+	long starttime = System.currentTimeMillis();
+	for(int i=0;i<nums1.length-1;i++) {
+		for(int j=0;j<nums1.length;j++) {
+			if(nums1[j]>nums1[j]+1) {
+				int temp = nums1[j];
+				nums1[j] = nums1[j+1];
+				nums1[j+1] = temp;
+			}
+		}
+	}
+	long endtime = System.currentTimeMillis();
+	System.out.println("冒泡排序总耗时为"+(endtime - starttime)+"毫秒");
+	//选择排序法
+	starttime = System.currentTimeMillis();
+	for(int i=0;i<nums2.length;i++) {
+		int min = nums2[i];
+		int minIndex = i;
+		for(int j=i+1;j<nums2.length;j++) {
+			min = nums2[j];
+			minIndex = j;	
+		}	
+		int temp = nums2[i];
+		nums2[i] = nums2[minIndex];
+		nums2[minIndex] = temp;
+	}
+	endtime = System.currentTimeMillis();
+	System.out.println("选择排序总耗时为"+(endtime-starttime)+"毫秒");
+	
+	
+	
+	}
+}
