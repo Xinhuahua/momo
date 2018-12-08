@@ -1,228 +1,124 @@
+//超声波测距程序 
+#include<reg51.h>
+#include<intrins.h>	
+#include"lcd.h"
 
-//超声波模块程序
+sbit Trig = P2^1;
+sbit Echo = P2^0;
 
-//超声波模块程序
 
-//Trig  = P2^0
 
-//Echo  = P3^2
+unsigned char PuZh[]=" MeasureDistance ";
+unsigned char code ASCII[15] =    {'0','1','2','3','4','5','6','7','8','9','.','-','M'};
 
-#include <reg52.h>    
+static unsigned char DisNum = 0; //显示用指针				  
+       unsigned int  time=0;
+	   unsigned long S=0;
+	   bit      flag =0;
+	   unsigned char disbuff[4]	   ={ 0,0,0,0,};
+/*******************************************************************************
+* 函 数 名         : main
+* 函数功能		   : 主函数
+* 输    入         : 无
+* 输    出         : 无
+*******************************************************************************/
+void Conut(void)
+	{
+	 time=TH0*256+TL0;
+	 TH0=0;
+	 TL0=0;
+	
+	 S=(time*1.7)/100;     //算出来是CM
+	 if((S>=700)||flag==1) //超出测量范围显示“-”
+	 {	 
+	  flag=0;
+	 
+	  DisplayOneChar(0, 1, ASCII[11]);
+	  DisplayOneChar(1, 1, ASCII[10]);	//显示点
+	  DisplayOneChar(2, 1, ASCII[11]);
+	  DisplayOneChar(3, 1, ASCII[11]);
+	  DisplayOneChar(4, 1, ASCII[12]);	//显示M
+	 }
+	 else
+	 {
+	  disbuff[0]=S%1000/100;
+	  disbuff[1]=S%1000%100/10;
+	  disbuff[2]=S%1000%10 %10;
+	  DisplayOneChar(0, 1, ASCII[disbuff[0]]);
+	  DisplayOneChar(1, 1, ASCII[10]);	//显示点
+	  DisplayOneChar(2, 1, ASCII[disbuff[1]]);
+	  DisplayOneChar(3, 1, ASCII[disbuff[2]]);
+	  DisplayOneChar(4, 1, ASCII[12]);	//显示M
+	 }
+	}
 
-#define uchar unsigned char
+void zd0() interrupt 1 		 //T0中断用来计数器溢出,超过测距范围
+  {
+    flag=1;							 //中断溢出标志
+  }
 
-#define uint  unsigned int
+ void  StartModule() 		         //启动模块
+  {
+	  Trig=1;			                     //启动一次模块
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_();
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_(); 
+	  _nop_();
+	  Trig=0;
+  }
 
-//
 
-void delay(uint z)
 
+void delayms(unsigned int ms)
+{
+	unsigned char i=100,j;
+	for(;ms;ms--)
+	{
+		while(--i)
+		{
+			j=10;
+			while(--j);
+		}
+	}
+}
+
+void main(void)
 {
 
- uint x,y;
+	 TMOD=0x01;		   //设T0为方式1，GATE=1；
+	 TH0=0;
+	 TL0=0;          
+	 ET0=1;             //允许T0中断
+	 EA=1;			   //开启总中断	
 
-  for(x=z;x>0;x--)
-
-  for(y=110;y>0;y--);
-
+	InitLcd1602();
+	LcdShowStr(0,0,PuZh);
+	while(1)
+	{
+		 StartModule();
+	     while(!Echo);		//当RX为零时等待
+	     TR0=1;			    //开启计数
+	     while(Echo);			//当RX为1计数并等待
+	     TR0=0;				//关闭计数
+         Conut();			//计算
+		 delayms(80);
+	}
+			
 }
-
-//
-
-void delay_20us()
-
- { 
-
-    uchar a ;
-
-    for(a=0;a<100;a++);
-
- }
-
-//***************************************************************
-
-//显示数据转换程序
-
-void display(uint temp) 
-
- { 
-
-    uchar ge,shi,bai;
-
-    bai=temp/100;
-
-    shi=(temp%100)/10;  
-
-    ge=temp%10;  
-
-    wela=1;
-
-    P0=0xf7;
-
-    wela=0;
-
-    dula=1;
-
-    P0=table[bai];
-
-    dula=0;
-
-    delay(1);
-
-    dula=1;
-
-    P0=0x00;   //关位码
-
-    dula=0;
-
-    wela=1;
-
-    P0=0xef;
-
-    wela=0;
-
-    dula=1;
-
-    P0=table[shi];
-
-    dula=0;
-
-    delay(1);
-
-    dula=1;
-
-    P0=0x00;   //关位码
-
-    dula=0;
-
- 
-
-    dula=1;
-
-    P0=table[ge];
-
-    dula=0;
-
-    wela=1;
-
-    P0=0xdf;
-
-    wela=0;
-
-    delay(1);
-
-    dula=1;
-
-    P0=0x00;   //关位码
-
-    dula=0;
-
- }
-
-//***************************************************************
-
-void main()  
-
-{ 
-
-    uint distance;
-
-    test =0;
-
-    Trig=0;       //首先拉低脉冲输入引脚
-
-    EA=1;         //打开总中断0 
-
-    TMOD=0x10;    //定时器1，16位工作方式 
-
-    while(1)        
-
-    {
-
-        EA=0;           //关总中断
-
-        Trig=1;         //超声波输入端
-
-        delay_20us();   //延时20us
-
-        Trig=0;         //产生一个20us的脉冲
-
-        while(Echo==0); //等待Echo回波引脚变高电平
-
-        succeed_flag=0; //清测量成功标志
-
-        EA=1; 
-
-        EX0=1;          //打开外部中断0
-
-        TH1=0;          //定时器1清零
-
-        TL1=0;          //定时器1清零
-
-        TF1=0;          //计数溢出标志
-
-        TR1=1;          //启动定时器1
-
-        delay(20);      //等待测量的结果
-
-        TR1=0;          //关闭定时器1
-
-        EX0=0;          //关闭外部中断0
-
-       if(succeed_flag==1)
-
-       {   
-
-          time=timeH*256+timeL;
-
-          distance=time*0.172;  //厘米
-
-          display(distance);
-
-       }                         
-
-      if(succeed_flag==0)
-
-       {
-
-          distance=0;                    //没有回波则清零
-
-          test = !test;                  //测试灯变化
-
-        }               
-
-    }
-
-}
-
-//***************************************************************
-
-//外部中断0，用做判断回波电平
-
-void exter()  interrupt 0   // 外部中断0是0号
-
- {   
-
-     timeH =TH1;    //取出定时器的值
-
-     timeL =TL1;    //取出定时器的值
-
-     succeed_flag=1;//至成功测量的标志
-
-     EX0=0;         //关闭外部中断
-
- }
-
-//****************************************************************
-
-//定时器1中断,用做超声波测距计时
-
-void timer1() interrupt 3  //
-
-    {
-
-         TH1=0;
-
-         TL1=0;
-
-     }
