@@ -1,0 +1,228 @@
+
+//超声波模块程序
+
+//超声波模块程序
+
+//Trig  = P2^0
+
+//Echo  = P3^2
+
+#include <reg52.h>    
+
+#define uchar unsigned char
+
+#define uint  unsigned int
+
+//
+
+void delay(uint z)
+
+{
+
+ uint x,y;
+
+  for(x=z;x>0;x--)
+
+  for(y=110;y>0;y--);
+
+}
+
+//
+
+void delay_20us()
+
+ { 
+
+    uchar a ;
+
+    for(a=0;a<100;a++);
+
+ }
+
+//***************************************************************
+
+//显示数据转换程序
+
+void display(uint temp) 
+
+ { 
+
+    uchar ge,shi,bai;
+
+    bai=temp/100;
+
+    shi=(temp%100)/10;  
+
+    ge=temp%10;  
+
+    wela=1;
+
+    P0=0xf7;
+
+    wela=0;
+
+    dula=1;
+
+    P0=table[bai];
+
+    dula=0;
+
+    delay(1);
+
+    dula=1;
+
+    P0=0x00;   //关位码
+
+    dula=0;
+
+    wela=1;
+
+    P0=0xef;
+
+    wela=0;
+
+    dula=1;
+
+    P0=table[shi];
+
+    dula=0;
+
+    delay(1);
+
+    dula=1;
+
+    P0=0x00;   //关位码
+
+    dula=0;
+
+ 
+
+    dula=1;
+
+    P0=table[ge];
+
+    dula=0;
+
+    wela=1;
+
+    P0=0xdf;
+
+    wela=0;
+
+    delay(1);
+
+    dula=1;
+
+    P0=0x00;   //关位码
+
+    dula=0;
+
+ }
+
+//***************************************************************
+
+void main()  
+
+{ 
+
+    uint distance;
+
+    test =0;
+
+    Trig=0;       //首先拉低脉冲输入引脚
+
+    EA=1;         //打开总中断0 
+
+    TMOD=0x10;    //定时器1，16位工作方式 
+
+    while(1)        
+
+    {
+
+        EA=0;           //关总中断
+
+        Trig=1;         //超声波输入端
+
+        delay_20us();   //延时20us
+
+        Trig=0;         //产生一个20us的脉冲
+
+        while(Echo==0); //等待Echo回波引脚变高电平
+
+        succeed_flag=0; //清测量成功标志
+
+        EA=1; 
+
+        EX0=1;          //打开外部中断0
+
+        TH1=0;          //定时器1清零
+
+        TL1=0;          //定时器1清零
+
+        TF1=0;          //计数溢出标志
+
+        TR1=1;          //启动定时器1
+
+        delay(20);      //等待测量的结果
+
+        TR1=0;          //关闭定时器1
+
+        EX0=0;          //关闭外部中断0
+
+       if(succeed_flag==1)
+
+       {   
+
+          time=timeH*256+timeL;
+
+          distance=time*0.172;  //厘米
+
+          display(distance);
+
+       }                         
+
+      if(succeed_flag==0)
+
+       {
+
+          distance=0;                    //没有回波则清零
+
+          test = !test;                  //测试灯变化
+
+        }               
+
+    }
+
+}
+
+//***************************************************************
+
+//外部中断0，用做判断回波电平
+
+void exter()  interrupt 0   // 外部中断0是0号
+
+ {   
+
+     timeH =TH1;    //取出定时器的值
+
+     timeL =TL1;    //取出定时器的值
+
+     succeed_flag=1;//至成功测量的标志
+
+     EX0=0;         //关闭外部中断
+
+ }
+
+//****************************************************************
+
+//定时器1中断,用做超声波测距计时
+
+void timer1() interrupt 3  //
+
+    {
+
+         TH1=0;
+
+         TL1=0;
+
+     }
