@@ -5,19 +5,25 @@ using System.Data;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
+using System.Threading;
+using System.IO;
 
 namespace SerialPort
 {
     ///----------------------------------------------------------------------
-    ///FrmSCI  :串口测试工程                                                
-    ///功能描述:测试串口通信是否正常                                        
-    ///         发送时可以选择字符串、十进制、十六进制三种方式              
-    ///         接收到的数据分别以字符串、十进制、十六进制三种方式显示      
-    ///目    的:测试串口                                                    
+    ///FrmSCI  :串口测试工程+浮点数四则元算+Flash中图片读写                                                
+    ///功能描述:1.测试串口通信是否正常                                                    
+    ///           接收到的数据分别以字符串、十进制、十六进制三种方式显示 
+    ///         2.在PC端与MCU端进行浮点数四则运算并运算结果显示出来
+    ///         3.在KL25Flash中存储图片，并读出Flash中存储的图片
+    ///目    的:1.测试串口 
+    ///         2.测试PC与MCU端进行浮点数四则运算差别及
+    ///           在串口通信中对数据进行组帧
+    ///         3.在KL25Flash中存储图片，并读出Flash中存储的图片
     ///说    明:                                                           
     ///注    意:                                                           
-    ///日    期:2010年3月31日                                              
-    ///编 程 者:LCX-WYH                                                     
+    ///日    期:2015年6月5日                                              
+    ///编 程 者:穆太力扑                                                     
     ///-----------串口测试工程(苏州大学飞思卡尔嵌入式中心)----------------------
     public partial class FrmSCI : Form
     {
@@ -56,6 +62,7 @@ namespace SerialPort
         /// <param name="e"></param>                                        
         /// <remarks></remarks>                                             
         ///-----------------------------------------------------------------
+        int jpgLen;
         private void FrmSCI_Load(object sender, EventArgs e)
         {
             //初始化时,按钮显示"打开串口(Open SCI)"
@@ -79,7 +86,7 @@ namespace SerialPort
                 this.BtnSCISwitch.Enabled = true;
                 this.CbSCIBaud.SelectedIndex = 0;
                 this.CbSCIComNum.SelectedIndex = 0;
-                this.CbSCISendType.SelectedIndex = 0;
+                //this.CbSCISendType.SelectedIndex = 0;
 
                 //设置初始的串口号与波特率
                 PublicVar.g_SCIComNum = this.CbSCIComNum.Text;
@@ -95,6 +102,12 @@ namespace SerialPort
                 this.TSSLState.Text = "没有可用的串口,请检查!";
                 this.BtnSCISwitch.Enabled = false;
             }
+            //this.pictureBox2.Image = Image.FromFile("D:\\1.jpg");
+            jpgLen = PictureToByte("1.jpg").Length;
+            byte[] picture_byte = new byte[jpgLen];
+            picture_byte = PictureToByte("1.jpg");
+            pictureBox2.Image = ByteToPicture(picture_byte);
+            
         }
 
         ///-----------------------------------------------------------------
@@ -197,12 +210,12 @@ namespace SerialPort
                     this.CbSCIComNum.Enabled = true;
                     //[波特率选择框]处于可用状态
                     this.CbSCIBaud.Enabled = true;
-                    this.TSSLState.Text += "关闭"+PublicVar.g_SCIComNum+"成功!";
+                    this.TSSLState.Text += "关闭" + PublicVar.g_SCIComNum + "成功!";
                     this.pictureBox1.Image = SerialPort.Properties.Resources.Run_static;
                 }
                 else//串口关闭失败
                 {
-                    this.TSSLState.Text += "关闭"+PublicVar.g_SCIComNum+"失败!";
+                    this.TSSLState.Text += "关闭" + PublicVar.g_SCIComNum + "失败!";
                 }
             }
         }
@@ -222,17 +235,6 @@ namespace SerialPort
         private void BtnSCISend_Click(object sender, EventArgs e)
         {
             this.TSSLState.Text = "过程提示: 执行发送数据...";
-
-            bool Flag;//判断数据发送是否成功
-            int i, count = 0;//len保存发送数据的长度
-            int len;
-
-            //0表示选择是字符发送,1表示的是十进制发送,2表示十六进制发送
-            int SendType;
-            SendType = CbSCISendType.SelectedIndex;
-
-            //定义一个ArrayList类的实例对象,实现一个数组,其大小在添加元
-            //素时自动变化
             System.Collections.ArrayList SendData = new
                 System.Collections.ArrayList();
 
@@ -243,64 +245,7 @@ namespace SerialPort
                 this.TSSLState.Text += "请先打开串口!";
                 return;
             }
-            //如果发送数据为空
-            if (this.TbSCISend.Text == string.Empty)
-            {
-                this.TSSLState.Text += "发送数据不得为空!";
-                return;
-            }
-
-            if (SendType == 0)//选择的是以字符串方式发送
-            {
-                this.TSSLState.Text = "以字符串方式发送数据!";
-                //将要发送的数据进行编码,并获取编码后的数据长度
-                len =System.Text.Encoding.Default.GetBytes(this.TbSCISend.Text).Length;
-                //sci.SCIReceInt(SCIPort,len);//设置产生接收中断的字节数  【2014-5-5 注释，否则会导致程序无响应】
-                //动态分配len字节单元内容用来存放发送数据
-                PublicVar.g_SendByteArray = new byte[len];
-               //获取TbSCISend文本的码值
-                PublicVar.g_SendByteArray =
-                  System.Text.Encoding.Default.GetBytes(this.TbSCISend.Text); 
-            }
-            else //选择的是以十进制或者是十六进制发送数据
-            {
-                //sci.SCIReceInt(SCIPort, 1);//设置产生接收中断的字节数    【2014-5-5 注释，否则会导致程序无响应】
-                foreach (string str in this.TbSCISend.Text.Split(','))
-                {
-                    //排除掉连续两个逗号,说明之间没有数
-                    if (str != string.Empty)
-                    {
-                        if (SendType == 1)//选择的是以十进制方式发送
-                        {
-                            //将文本框中的数转化为十进制存入ArrayList类的实例对象
-                            SendData.Add(Convert.ToByte(str, 10));
-                            count++;//进行计数,统计有效的数据个数
-                        }
-                        else
-                        {
-                            //将文本框中的数转化为十六进制存入ArrayList类的实例对象
-                            SendData.Add(Convert.ToByte(str, 16));
-                            count++;//进行计数,统计有效的数据个数
-                        }
-                    }
-                }
-                //动态分配空间存放发送数据
-                PublicVar.g_SendByteArray = new byte[count];
-
-                //将已经转化后的数据放入到全局变量g_SendByteArray中
-                for (i = 0; i < count; i++)
-                    PublicVar.g_SendByteArray[i] = (byte)SendData[i];
-            }
-
-            //发送全局变量_SendByteArray中的数据,并返回结果
-            Flag = sci.SCISendData(this.SCIPort, ref PublicVar.g_SendByteArray);
-
-            if (Flag == true)//数据发送成功
-                this.TSSLState.Text += "数据发送成功!";
-            else
-                this.TSSLState.Text += "数据发送失败!";
         }
-
         ///-----------------------------------------------------------------
         /// <summary>                                                       
         /// 对    象:BtnSCIClearSend                                        
@@ -313,10 +258,119 @@ namespace SerialPort
         ///-----------------------------------------------------------------
         private void BtnSCIClearSend_Click(object sender, EventArgs e)
         {
-            this.TbSCISend.Text = "";
+            //this.TbSCISend.Text = "";
             this.TSSLState.Text = "过程提示:清空发送文本框!";
         }
 
+        //=====================================================================
+        //函数名：组帧
+        //功  能：对串口中接受到的Flash中存储的图片数据进行组帧，
+        //        并将其存入到数组中，进行图片还原。  
+        //编程者：穆太力扑
+        //日  期：2015/6/3
+        //=====================================================================
+        static int frameCount = 0;                  //组帧计数器
+        static int myflag = 0;
+        static byte a;
+        public int CreatePicFrame(byte Data, byte[] buffer)
+        {
+            int frameFlag = 0;
+            switch (frameCount)                     //根据静态变量frameCount组帧
+            {
+                case 0:                             //第一个数据
+                    if (Convert.ToChar(Data) == '*') //收到数据是帧头FrameHead
+                    {
+                        frameCount++;
+                        frameFlag = 0;        //组帧开始
+                    }
+                    break;
+                case 1:                           //第二个数据，该数据是随后接收的数据个数
+                    a = Data;
+                    frameCount++;             //偏移量
+                    break;
+                case 2:
+                case 3:
+                case 4:
+                    frameCount++;             //偏移量
+                    break;
+                default:                        //其他情况
+                    {
+                        try
+                        {
+                            //第二位数据是有效数据长度,根据它接收余下的数据直到帧尾前一位
+                            if ((frameCount >= 5) && (frameCount <= a + 1))
+                            {
+                                buffer[250 * myflag + (frameCount - 5)] = Data;
+                                frameCount++;
+                                break;
+                            }
+                            //若是末尾数据则执行
+                            if (frameCount >= (buffer[myflag * 256 + 1] + 2))
+                            {
+                                if (Convert.ToChar(Data) == '#')    //若是帧尾
+                                {
+                                    frameFlag = 1;    //组帧成功
+                                    myflag++;
+                                    //计数清0，准备重新组帧
+                                    frameCount = 0;
+                                }
+                                break;
+                            }
+                        }
+                        catch { }
+                        break;
+                    }
+            }
+            return frameFlag;
+            //返回组帧状态
+        }
+        //=====================================================================
+        //函数名：组帧
+        //功  能：对串口中接受到的Flash中存储的图片数据进行组帧，
+        //        并将其存入到数组中，进行图片还原。  
+        //编程者：
+        //日  期：2015/6/3
+        //=====================================================================
+        static int qitaCount = 0;                  //组帧计数器
+        public int CreateFrame(byte Data, byte[] frameData)
+        {
+            int frameFlag = 0;
+
+            switch (qitaCount)                     //根据静态变量frameCount组帧
+            {
+                case 0:                             //第一个数据
+                    if (Convert.ToChar(Data) == '*')            //收到数据是帧头FrameHead
+                    {
+                        qitaCount++;
+                        frameFlag = 0;        //组帧开始
+                    }
+                    break;
+                case 1:                           //第二个数据，该数据是随后接收的数据个数
+                    frameData[qitaCount - 1] = Data;
+                    qitaCount++;
+                    break;
+                default:                        //其他情况
+                    {
+                        try
+                        {
+                            if (qitaCount <= frameData[0]+1)
+                            {
+                                frameData[qitaCount - 1] = Data;
+                                qitaCount++;
+                            }
+                            else
+                            {
+                                frameFlag = 1;    //组帧成功
+                                qitaCount = 0;
+                            }
+                        }
+                        catch { }
+                        break;
+                    }
+            }
+            return frameFlag;
+            //返回组帧状态
+        }
         ///-----------------------------------------------------------------
         /// <summary>                                                       
         /// 对    象:SCIPort                                                
@@ -328,45 +382,82 @@ namespace SerialPort
         /// <param name="sender"></param>                                   
         /// <param name="e"></param>                                        
         ///-----------------------------------------------------------------
+        byte[] Picture_ReceiveArry = new byte[5120];
         private void SCIPort_DataReceived(object sender,
             System.IO.Ports.SerialDataReceivedEventArgs e)
         {
             String str = String.Empty;
             bool Flag;//标记串口接收数据是否成功
-            int len;//标记接收的数据的长度
-            char c;
-            byte[] ch2=new byte[2];
-                //调用串口接收函数,并返回结果
-                Flag = sci.SCIReceiveData(SCIPort, ref PublicVar.g_ReceiveByteArray);
-                if (Flag == true)//串口接收数据成功
+            int len,en;//标记接收的数据的长度
+            byte[] mFrameData = new byte[100];
+            byte[] ch2 = new byte[2];
+
+            Thread.Sleep(2000);
+            //调用串口接收函数,并返回结果
+            Flag = sci.SCIReceiveData(SCIPort, ref PublicVar.g_ReceiveByteArray);
+            if (Flag == true)//串口接收数据成功
+            {
+                len = PublicVar.g_ReceiveByteArray.Length;
+                //对于字符串形式,考虑到可能有汉字,
+                //直接调用系统定义的函数,处理整个字符串
+                str = Encoding.Default.GetString(PublicVar.g_ReceiveByteArray);
+                SCIUpdateRevtxtbox(textBox1, str);
+                for (int i = 0; i < len; i++)
                 {
-                    len = PublicVar.g_ReceiveByteArray.Length;
-                    //对于字符串形式,考虑到可能有汉字,
-                    //直接调用系统定义的函数,处理整个字符串
-                    str = Encoding.Default.GetString(PublicVar.g_ReceiveByteArray);
+                    //开始组帧
+                    if(len>100) 
+                        en=CreatePicFrame(PublicVar.g_ReceiveByteArray[i], Picture_ReceiveArry);
+                    else 
+                        en = CreateFrame(PublicVar.g_ReceiveByteArray[i], mFrameData);
+                    //if (en == 0) break;
 
-                    SCIUpdateRevtxtbox(TbShowString, str);
-
-                    //十进制和十六进制形式按字节进行处理
-                    for (int i = 0; i < len; i++)
-                    {
-                        //十进制都是按照三位来显示,字节之间有空格表示区分
-                        SCIUpdateRevtxtbox(TbShowDec,
-                            PublicVar.g_ReceiveByteArray[i].ToString("D3") + "  ");
-                        //十六进制都是按照两位来显示,字节之间有空格表示区分
-                        SCIUpdateRevtxtbox(TbShowHex,
-                            PublicVar.g_ReceiveByteArray[i].ToString("X2") + "  ");
-                    }
-
-                   // sci.SCIReceInt(SCIPort, 1);//设置产生接收中断的字节数【2014-5-5 注释，否则会导致程序无响应】
-                    this.TSSLState.Text = "过程提示:数据接收成功!";
+                    //十进制都是按照三位来显示,字节之间有空格表示区分
+                    //SCIUpdateRevtxtbox(textBox2,
+                    //PublicVar.g_ReceiveByteArray[i].ToString("D3") + "  ");
+                    //十六进制都是按照两位来显示,字节之间有空格表示区分
+                    SCIUpdateRevtxtbox(textBox3,
+                    PublicVar.g_ReceiveByteArray[i].ToString("X2") + "  ");
                 }
-                //接收数据失败
-                else
+                str = Encoding.Default.GetString(mFrameData);
+                switch (str[1])
                 {
-                    //sci.SCIReceInt(SCIPort, 1);//设置产生接收中断的字节数【2014-5-5 注释，否则会导致程序无响应】 
-                    this.TSSLState.Text = "过程提示:数据接收失败!";
+                    case 'D':
+                        SCIUpdateRevtxtbox(textBox9, str.Substring(2, mFrameData[0] - 1));
+                        break;
+                    case 'F':
+                        byte[] tfloat = new byte[4];
+                        float result1;
+                        string fstr;
+                        tfloat[0] = mFrameData[3];
+                        tfloat[1] = mFrameData[4];
+                        tfloat[2] = mFrameData[5];
+                        tfloat[3] = mFrameData[6];
+                        fstr = "";
+                        result1 = BitConverter.ToSingle(tfloat, 0);
+                        fstr = result1.ToString("F6");
+                        SCIUpdateRevtxtbox(tBMCUR, fstr);
+                        break;
+                    case 'A':
+                        try
+                        {
+                            float temper = (float)(25.0 - (mFrameData[2] * 3.3 * 1000 / 256 - 719) / 1.715);//将电压值转换为温度值  
+                            string tem = temper.ToString("F1");
+                            SCIUpdateRevtxtbox(textBox5, tem);
+                        }
+                        catch
+                        { }
+                        break;
                 }
+                
+                this.TSSLState.Text = "过程提示:数据接收成功!";
+            }
+            //接收数据失败
+            else
+            {
+                //sci.SCIReceInt(SCIPort, 1);//设置产生接收中断的字节数【2014-5-5 注释，否则会导致程序无响应】 
+                this.TSSLState.Text = "过程提示:数据接收失败!";
+            }
+
         }
 
         ///-----------------------------------------------------------------
@@ -413,9 +504,9 @@ namespace SerialPort
         ///-----------------------------------------------------------------
         private void btnClearRec_Click(object sender, EventArgs e)
         {
-            this.TbShowString.Text = string.Empty;
-            this.TbShowDec.Text = string.Empty;
-            this.TbShowHex.Text = string.Empty;
+            //this.TbShowString.Text = string.Empty;
+            //this.TbShowDec.Text = string.Empty;
+            //this.TbShowHex.Text = string.Empty;
             this.TSSLState.Text = "过程提示:清空接收文本框!";
         }
 
@@ -431,90 +522,6 @@ namespace SerialPort
         ///----------------------------------------------------------------- 
         private void TbSCISend_KeyPress(object sender, KeyPressEventArgs e)
         {
-            int select = CbSCISendType.SelectedIndex;
-            if (select == 1)//输入的是十进制的数
-            {
-                //除了数字、逗号和退格键,其他都不给输入
-                if (e.KeyChar >= '0' && e.KeyChar <= '9' || e.KeyChar == 0x08
-                    || e.KeyChar == ',')
-                {
-                    //输入的是数字,可以任意输入逗号与退格符
-                    if (e.KeyChar >= '0' && e.KeyChar <= '9')
-                    {
-                        //在文本框中没有逗号时,
-                        //this.TbSCISend.Text.LastIndexOf(',')默认为-1
-                        //逗号之后出现第三个数字时,
-                        //才用得着考虑是否会大于255
-                        if (this.TbSCISend.Text.Length -
-                            this.TbSCISend.Text.LastIndexOf(',') >= 2)
-                        {
-                            //考虑如果输入的话,是否会超出255
-                            if (int.Parse(
-                                    this.TbSCISend.Text.Substring(
-                                 TbSCISend.Text.LastIndexOf(',') + 1)) * 10
-                                    + e.KeyChar - '0' > 255)
-                            {
-                                e.Handled = true;
-                                this.TSSLState.Text = "输入数据不得大于255";
-                            }
-                            //默认情况下是允许输入的,即e.Handled = false
-                        }
-                    }
-                }
-                else
-                {
-                    e.Handled = true;//除了逗号、数字0~9,其他都不给输入
-                    this.TSSLState.Text = "输入数据必须是0-9,或者逗号"
-                                          + ",或者退格符";
-                }
-            }
-            //十六进制的处理方式与十进制相同,只是判断是否大于255时不太一样
-            else if (select == 2)
-            {
-                //除了数字、大写字母、小写字母、逗号和退格键,其他都不给输入
-                if (e.KeyChar >= '0' && e.KeyChar <= '9' || e.KeyChar >= 'a'
-                    && e.KeyChar <= 'f' || e.KeyChar >= 'A' && e.KeyChar <=
-                    'F' || e.KeyChar == 0x08 || e.KeyChar == ',')
-                {
-                    //逗号和退格符可以任意输入,只考虑输入数字的情况
-                    if (e.KeyChar >= '0' && e.KeyChar <= '9')
-                    {
-                        if (this.TbSCISend.Text.Length -
-                             this.TbSCISend.Text.LastIndexOf(',') >= 2)
-                        {
-                            if (Convert.ToInt32(TbSCISend.Text.Substring(
-                               TbSCISend.Text.LastIndexOf(',') + 1), 16) * 16
-                                + (e.KeyChar - '0') > 255)
-                            {
-                                e.Handled = true;
-                                this.TSSLState.Text = "输入数据不得大于255";
-                            }
-                        }
-                    }
-                    else if (e.KeyChar >= 'a' && e.KeyChar <= 'f'
-                        || e.KeyChar >= 'A' && e.KeyChar <= 'F')
-                    {
-                        if (this.TbSCISend.Text.Length -
-                             this.TbSCISend.Text.LastIndexOf(',') >= 2)
-                        {
-                            //无论是大写字母还是小写字母都转化成大写字母判断
-                            if (Convert.ToInt32(TbSCISend.Text.Substring(
-                               TbSCISend.Text.LastIndexOf(',') + 1), 16) * 16
-                                + (Char.ToUpper(e.KeyChar) - 'A') > 255)
-                            {
-                                e.Handled = true;
-                                this.TSSLState.Text = "输入数据不得大于255";
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    e.Handled = true;
-                    this.TSSLState.Text = "输入数据必须是0-9,a-f,A-F,或者逗号"
-                                          + ",或者退格符";
-                }
-            }
         }
 
         ///-----------------------------------------------------------------
@@ -535,28 +542,6 @@ namespace SerialPort
         private void CbSCISendType_SelectedIndexChanged(object sender,
                                                         EventArgs e)
         {
-            this.TSSLState.Text = "过程提示:选择数据发送方式!";
-            //选择某一种发送方式时,首先清空发送框
-            this.TbSCISend.Text = string.Empty;
-
-            //选择的是发送字符串
-            if (CbSCISendType.SelectedIndex == 0)
-            {
-                this.LabNote.Text = "请输入字符串!";
-                this.TSSLState.Text = "你选择了发送字符串!";
-            }
-            else if (CbSCISendType.SelectedIndex == 1)
-            {
-                this.LabNote.Text = "请输入十进制数,以逗号(英文输入法下)隔开"
-                                    + ",数据范围0-255,允许用退格键";
-                this.TSSLState.Text = "你选择了发送十进制数!";
-            }
-            else
-            {
-                this.LabNote.Text = "请输入十六进制数,以逗号(英文输入法下)隔"
-                                    + "开,数据范围00-FF,允许用退格键";
-                this.TSSLState.Text = "你选择了发送十六进制数! ";
-            }
         }
 
         ///-----------------------------------------------------------------
@@ -603,18 +588,410 @@ namespace SerialPort
                 sci.SCIClose(SCIPort);
             }
             catch
-            { }
+            {
+            }
         }
 
-        private void SerialPortSend_Enter(object sender, EventArgs e)
+        //四则运算
+        private void button1_Click(object sender, EventArgs e)
         {
+            byte[] SendByteArray = new byte[16];      //总长
+            float dbx, dby, result=0.0f;
+            byte[] bchar = new byte[4];
+            dbx = float.Parse(tBX.Text);
+            dby = float.Parse(tBY.Text);
+            tBMCUR.Text = "";
+            //赋值
+            SendByteArray[0] = (byte)'*';         //帧头
+            SendByteArray[1] = 10;                 //数据长度
+            SendByteArray[2] = (byte)'F';
+            //tBX:
+            bchar = BitConverter.GetBytes(dbx);
+            SendByteArray[4] = bchar[0];
+            SendByteArray[5] = bchar[1];
+            SendByteArray[6] = bchar[2];
+            SendByteArray[7] = bchar[3];
+            //tBY:
+            bchar = BitConverter.GetBytes(dby);
+            SendByteArray[8] = bchar[0];
+            SendByteArray[9] = bchar[1];
+            SendByteArray[10] = bchar[2];
+            SendByteArray[11] = bchar[3];
+            SendByteArray[12] = (byte)'#';
+            if (m == 0)                               //判断运算符，m=0为加法运算
+            {
+                SendByteArray[3] = (byte)'A';         //操作命令
+                result = dbx + dby;
+            }
+            else if (m == 1)                               //判断运算符，m=1为减法运算
+            {
+                SendByteArray[3] = (byte)'S';         //操作命令
+                result = dbx - dby;
+            }
+            else if (m == 2)                               //判断运算符，m=2为乘法运算
+            {
+                SendByteArray[3] = (byte)'M';         //操作命令
+                result = dbx * dby;
 
+            }
+            else if (m == 3)                               //判断运算符，m=3为除法运算
+            {
+                SendByteArray[3] = (byte)'D';         //操作命令
+                result = dbx / dby;
+            }
+            tBPCR.Text = result.ToString("F6");
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray, 0, 13);
+                Thread.Sleep(200);
+            }
         }
-
-        private void SetSerialPort_Enter(object sender, EventArgs e)
+        static int m = 0;//判断运算符标志
+        private void comboBox1_SelectedIndexChanged_1(object sender, EventArgs e)
         {
+            m = comboBox1.SelectedIndex;
+        }
+       
+        private void button2_Click(object sender, EventArgs e)//擦除
+        {
+            byte[] bLen = BitConverter.GetBytes(jpgLen);
+            byte[] SendByteArray23 = new byte[] { (byte)'*', 5, (byte)'E', 0,0,0,0,(byte)'#' };
+            SendByteArray23[3] = bLen[0];
+            SendByteArray23[4] = bLen[1];
+            SendByteArray23[5] = bLen[2];
+            SendByteArray23[6] = bLen[3];
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray23, 0, 8);
+            }
+            this.TSSLState.Text = "过程提示:擦除Flash中数据";
+        }
+
+        public byte[] PictureToByte(string imagePath)//图片转换字节
+        {
+            FileStream fs = new FileStream(imagePath, FileMode.Open);
+            byte[] byteData = new byte[fs.Length];
+            fs.Read(byteData, 0, byteData.Length);
+            fs.Close();
+            return byteData;
+        }
+        public System.Drawing.Image ByteToPicture(byte[] streamByte)//字节转换图片
+        {
+            System.IO.MemoryStream ms;
+            System.Drawing.Image img = null ;
+            try
+            {
+                ms = new System.IO.MemoryStream(streamByte);
+                img = System.Drawing.Image.FromStream(ms);
+            }
+            catch { }
+            return img;
+        }
+        private void button3_Click(object sender, EventArgs e)//写入Flash
+        {
+            //定义组帧数组
+            byte[][] SendByteArray = new byte[jpgLen / 250 + 1][];
+            // Create the jagged array 
+            for (int i = 0; i < SendByteArray.Length; i++)
+            {
+                SendByteArray[i] = new byte[256];
+            } 
+            
+            //读取磁盘上的图片
+            int a = PictureToByte("1.jpg").Length;
+            byte[] picture_byte = new byte[a];
+            picture_byte = PictureToByte("1.jpg");
+
+            //----------------------------------开  始  组  帧--------------------------------------
+            for (int  i = 0; i <= (jpgLen / 250 ); i++)
+            {
+                SendByteArray[i][0] = (byte)'*';          //帧头
+                SendByteArray[i][1] = 253;                //帧长
+                SendByteArray[i][2] = (byte)'W';          //操作符
+                SendByteArray[i][3] = (byte)('A' + i/4);  //扇区号
+                SendByteArray[i][4] = (byte)('0' + i%4);  //偏移量
+                SendByteArray[i][255] = (byte)'#';        //帧尾
+            }
+            
+            for (int i = 0; i < (jpgLen / 250); i++)
+            {
+                for (int j = 0; j < 250; j++)
+                    SendByteArray[i][j + 5] = picture_byte[ i * 250 + j];//数据
+            }
+            
+            for (int i = (jpgLen / 250),j = 0; j < (jpgLen-i*250); j++)
+                SendByteArray[i][j + 5] = picture_byte[ i * 250 + j];//数据
+
+            for (int i = (jpgLen / 250), j = (jpgLen - i * 250); j < 250; j++)
+                SendByteArray[i][j + 5] = (byte)255;//数据
+            
+                
+            if (SCIPort.IsOpen == true)//串口发送
+            {
+                for (int i = 0; i <= (jpgLen / 250 ); i++)
+                {
+                    SCIPort.Write(SendByteArray[i], 0, 256);
+                    Thread.Sleep(200);
+                }
+            }
+            this.TSSLState.Text = "过程提示:数据写入Flash中";
+        }
+
+        int Read_flag = 0;
+        private void button4_Click(object sender, EventArgs e)//从Flash读取
+        {
+            byte[] bLen = BitConverter.GetBytes(jpgLen);
+            byte[] SendByteArray23 = new byte[] { (byte)'*', 5, (byte)'R', 0, 0, 0, 0, (byte)'#' };
+            SendByteArray23[3] = bLen[0];
+            SendByteArray23[4] = bLen[1];
+            SendByteArray23[5] = bLen[2];
+            SendByteArray23[6] = bLen[3];
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray23, 0, 8);
+            }
+            Read_flag = 1;
+            t = 0;
+            pictureBox3.Image = ByteToPicture(bLen);
+            this.TSSLState.Text = "过程提示：读取Flash中数据";
+
 
         }
-      //------------------------------------------------------------------
+
+        int t = 0;
+        static double temp = 0;
+        //刷新图片
+        private void timer1_Tick(object sender, EventArgs e)
+        {
+            if (SCIPort.IsOpen == true && Read_flag == 1)
+            {
+                t++;
+                if (t % 2 == 0)
+                {
+                    label6.Text = "读取图片中...";
+                }
+                else
+                {
+                    label6.Text = "读取图片中.";
+                }
+                if (t > 10)
+                {
+                    label6.Text = "";
+                    pictureBox3.Image = ByteToPicture(Picture_ReceiveArry);
+                    
+                }
+            }
+            if (SCIPort.IsOpen == true)
+            {
+                temp++;            
+            }
+        }
+
+
+        private void button7_Click_1(object sender, EventArgs e)
+        {
+            byte[] SendByteArray = new byte[6];
+            SendByteArray[0] = (byte)'*';         //帧头
+            SendByteArray[1] = 2;                 //数据长度
+            SendByteArray[2] = (byte)'L';
+            SendByteArray[3] = (byte)'R';         //操作命令
+            SendByteArray[4] = (byte)'#';
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray, 0, 5);
+            }
+        }
+
+        private void button6_Click_1(object sender, EventArgs e)
+        {
+            byte[] SendByteArray = new byte[6];
+            SendByteArray[0] = (byte)'*';         //帧头
+            SendByteArray[1] = 2;                 //数据长度
+            SendByteArray[2] = (byte)'L';
+            SendByteArray[3] = (byte)'B';         //操作命令
+            SendByteArray[4] = (byte)'#';
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray, 0, 5);
+            }
+        }
+
+        private void button5_Click_1(object sender, EventArgs e)
+        {
+            byte[] SendByteArray = new byte[6];
+            SendByteArray[0] = (byte)'*';         //帧头
+            SendByteArray[1] = 2;                 //数据长度
+            SendByteArray[2] = (byte)'L';
+            SendByteArray[3] = (byte)'G';         //操作命令
+            SendByteArray[4] = (byte)'#';
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray, 0, 5);
+            }
+        }
+
+        private void button8_Click(object sender, EventArgs e)
+        {
+            byte[] SendByteArray = new byte[6];
+            SendByteArray[0] = (byte)'*';         //帧头
+            SendByteArray[1] = 2;                 //数据长度
+            SendByteArray[2] = (byte)'L';
+            SendByteArray[3] = (byte)'Q';         //操作命令
+            SendByteArray[4] = (byte)'#';
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray, 0, 5);
+            }
+        }
+
+        private void button9_Click(object sender, EventArgs e)
+        {
+            byte[] SendByteArray = new byte[6];
+            SendByteArray[0] = (byte)'*';         //帧头
+            SendByteArray[1] = 2;                 //数据长度
+            SendByteArray[2] = (byte)'L';
+            SendByteArray[3] = (byte)'O';         //操作命令
+            SendByteArray[4] = (byte)'#';
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray, 0, 5);
+            }
+        }
+
+        private void button10_Click(object sender, EventArgs e)
+        {
+            byte[] SendByteArray = new byte[6];
+            SendByteArray[0] = (byte)'*';         //帧头
+            SendByteArray[1] = 2;                 //数据长度
+            SendByteArray[2] = (byte)'A';
+            SendByteArray[3] = (byte)'p';         //操作命令
+            SendByteArray[4] = (byte)'#';
+            if (SCIPort.IsOpen == true)
+            {
+                SCIPort.Write(SendByteArray, 0, 5);
+            }
+            this.textBox5.Text = "";
+        }
+
+        private void button12_Click(object sender, EventArgs e)
+        {
+            char cmd1 = char.Parse(this.comboBox2.Text.Trim().Substring(0, 1));
+            byte cmd2 = byte.Parse(this.textBox7.Text.Trim());
+            byte cmd3 = byte.Parse(this.textBox8.Text.Trim());
+            byte[] SendByteArray = new byte[6];
+            byte cmd4 = byte.Parse(this.textBox2.Text.Trim());
+            byte[] cmd5 = Encoding.Default.GetBytes(this.textBox9.Text.Trim());
+            switch (cmd1)
+            {
+
+                case 'S'://删除flash扇区中数据
+                    SendByteArray[0] = (byte)'*';      //帧头
+                    SendByteArray[1] = 3;              //帧长度
+                    SendByteArray[2] = (byte)cmd1;     //操作命令
+                    SendByteArray[3] = cmd2;           //起始扇区
+                    SendByteArray[4] = cmd3;           //扇区数量
+                    SendByteArray[5] = (byte)'#';
+
+                    if (SCIPort.IsOpen == true)
+                    {
+                        SCIPort.Write(SendByteArray, 0, 6);
+                    }
+                    break;
+                   
+                case 'X'://写数据入flash中
+                    cmd4 = (byte)(this.textBox9.Text.Length);
+                    this.textBox2.Text = cmd4.ToString();
+                    SendByteArray = new byte[7+cmd4];
+                    SendByteArray[0] = (byte)'*';       //帧头
+                    SendByteArray[1] = (byte)(4 + cmd4);               //帧长度
+                    SendByteArray[2] = (byte)cmd1;      //操作命令
+                    SendByteArray[3] = cmd2 ;           //起始扇区
+                    SendByteArray[4] = cmd3 ;           //偏移量
+                    SendByteArray[5] = cmd4 ;           //字符数量
+                    for(int i=0;i<cmd4;i++)
+                       SendByteArray[6+i] = cmd5[i] ;           //字符数量
+                    SendByteArray[6 + cmd4] = (byte)'#';
+                    if (SCIPort.IsOpen == true)
+                    {
+                        SCIPort.Write(SendByteArray, 0, 7+cmd4);
+                    }
+                    break;
+                case 'D'://读flash中数据显示
+                    SendByteArray = new byte[7];
+                    SendByteArray[0] = (byte)'*';       //帧头
+                    SendByteArray[1] = 4;               //数据长度
+                    SendByteArray[2] = (byte)cmd1;      //操作命令
+                    SendByteArray[3] = cmd2 ;           //起始扇区
+                    SendByteArray[4] = cmd3 ;           //偏移量
+                    SendByteArray[5] = cmd4 ;           //字符数量
+                    SendByteArray[6] = (byte)'#';
+                    if (SCIPort.IsOpen == true)
+                    {
+                        SCIPort.Write(SendByteArray, 0, 7);
+                    }
+                    break;
+            }
+            
+        }
+
+        static string strBox2 = "18";
+        private void comboBox2_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            label14.Text = "起始扇区";
+            strBox2 = textBox7.Text;
+            switch (char.Parse(this.comboBox2.Text.Substring(0, 1)))
+            {
+                case 'S':
+                    label15.Text = "扇区数";
+                    textBox7.Text = strBox2;
+                    textBox8.Text = "1";
+                    label3.Visible = false;
+                    textBox2.Visible = false;
+                    label16.Visible = false;
+                    textBox9.Visible = false;
+                    break;
+                case 'X':
+                    textBox7.Text = strBox2;
+                    textBox8.Text = "0";
+                    label15.Text = "偏移量";
+                    label3.Visible = true;
+                    label3.Text = "字符数量";
+                    textBox2.Visible = true;
+                    textBox2.Text = "4";
+                    label16.Visible = true;
+                    label16.Text = "写入数据：";
+                    textBox9.Visible = true ;
+                    textBox9.Text = "1234";
+                    break;
+                case 'D':
+                    label15.Text = "偏移量";
+                    textBox7.Text = strBox2;
+                    label3.Visible = true;
+                    label3.Text = "字符数量";
+                    textBox2.Visible = true;
+                    label16.Visible = true;
+                    label16.Text = "读取数据：";
+                    textBox9.Visible = true;
+                    textBox9.Text = "";
+                    break;
+            }
+        }
+        private void textBox8_TextChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                if (label15.Text == "偏移量")
+                {
+                    if ((int.Parse(this.textBox8.Text) % 4) != 0)
+                    {
+                        MessageBox.Show("只能输入4的倍数的偏移量");
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+        }        
     }
 }
